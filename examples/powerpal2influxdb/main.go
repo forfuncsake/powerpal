@@ -40,9 +40,7 @@ func main() {
 		log.Fatalf("query parsing error: %s\n", result.Err().Error())
 	}
 
-	//TODO: set to zero after we have batched writes
-	//lastRecord := time.Unix(0,0)
-	lastRecord := time.Now().Add(-time.Hour)
+	lastRecord := time.Unix(0, 0)
 	if result.Next() {
 		lastRecord = result.Record().Time()
 	} else {

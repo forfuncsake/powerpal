@@ -105,8 +105,49 @@ func NewInfluxExporter(c influxdb2.Client, org string, bucket string, measuremen
 
 // Write implements the Exporter interface for InfluxDB output.
 func (e *InfluxExporter) Write(readings []MeterReading) error {
-	api := e.client.WriteAPIBlocking(e.org, e.bucket)
+	api := e.client.WriteAPI(e.org, e.bucket)
+
+	firstErr := make(chan error, 1)
+	flushed := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		errorsCh := api.Errors()
+		for {
+			select {
+			case err, ok := <-errorsCh:
+				if !ok {
+					select {
+					case firstErr <- nil:
+					default:
+					}
+					return
+				}
+				if err != nil {
+					select {
+					case firstErr <- err:
+					default:
+					}
+					cancel()
+				}
+			case <-flushed:
+				select {
+				case firstErr <- nil:
+				default:
+				}
+				return
+			}
+		}
+	}()
+
+LOOP:
 	for _, reading := range readings {
+		select {
+		case <-ctx.Done():
+			break LOOP
+		default:
+		}
 		p := influxdb2.NewPoint(e.measurement,
 			map[string]string{"peak": fmt.Sprint(reading.Peak)},
 			map[string]interface{}{
@@ -116,10 +157,10 @@ func (e *InfluxExporter) Write(readings []MeterReading) error {
 				"watt_hours": reading.WattHours,
 			},
 			time.Unix(reading.Timestamp, 0))
-		if err := api.WritePoint(context.Background(), p); err != nil {
-			return fmt.Errorf("failed to write point (%d) to influxdb: %w", reading.Timestamp, err)
-		}
+		api.WritePoint(p)
 	}
+	api.Flush()
+	close(flushed)
 
-	return nil
+	return <-firstErr
 }
