@@ -21,5 +21,8 @@ This repo was created to allow for regular retrieval of the latest uploaded read
   - triggering home automation actions
 
 
+## More Info
+
+See: https://forfuncsake.github.io/post/2021/08/owning-my-own-powerpal-data/
 
 The author of this repo is not affiliated with Powerpal.
